@@ -1,5 +1,6 @@
 'use strict';
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const { db, seedIfEmpty, insertStock, rowToStock, exportAll, importAll } = require('./db');
 const { createPgStoreFromEnv } = require('./pgstore');
@@ -13,25 +14,55 @@ seedIfEmpty();
 // stays the working store. init() runs before listen() in start() below.
 const pgStore = createPgStoreFromEnv();
 
-// ---- optional Basic auth (enabled only when APP_PASSWORD is set) ----
-if (process.env.APP_PASSWORD) {
-  const user = process.env.APP_USER || 'admin';
-  const pass = process.env.APP_PASSWORD;
-  app.use((req, res, next) => {
-    const h = req.headers.authorization || '';
-    const [scheme, b64] = h.split(' ');
-    if (scheme === 'Basic' && b64) {
-      const [u, p] = Buffer.from(b64, 'base64').toString().split(':');
-      if (u === user && p === pass) return next();
-    }
-    res.set('WWW-Authenticate', 'Basic realm="stock-watchlist"');
-    return res.status(401).send('Authentication required');
-  });
-  console.log('[auth] Basic auth enabled');
+// ---- optional password lock (enabled only when APP_PASSWORD is set) ----
+// Not Basic auth: browsers must not remember credentials. The client posts
+// the password to POST /api/unlock and receives a random token that it keeps
+// in page memory only (never localStorage/sessionStorage/Cookie), so every
+// page reload drops the token and the lock screen comes back.
+const APP_PASSWORD = process.env.APP_PASSWORD || null;
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const unlockTokens = new Map(); // token -> expiresAt (epoch ms)
+
+function hasValidToken(req) {
+  const t = req.headers['x-app-token'];
+  if (!t || typeof t !== 'string') return false;
+  const exp = unlockTokens.get(t);
+  if (!exp) return false;
+  if (Date.now() > exp) { unlockTokens.delete(t); return false; }
+  return true;
 }
+
+function passwordMatches(pw) {
+  if (!APP_PASSWORD || typeof pw !== 'string') return false;
+  const a = Buffer.from(pw);
+  const b = Buffer.from(APP_PASSWORD);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+if (APP_PASSWORD) console.log('[auth] password lock enabled');
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Unlock endpoint (exempt from the token guard below).
+app.post('/api/unlock', (req, res) => {
+  if (!APP_PASSWORD) return res.json({ locked: false, token: null });
+  if (!passwordMatches(req.body && req.body.password)) {
+    return res.status(401).json({ error: 'invalid password' });
+  }
+  // Opportunistically drop expired tokens.
+  const now = Date.now();
+  for (const [t, exp] of unlockTokens) if (now > exp) unlockTokens.delete(t);
+  const token = crypto.randomBytes(32).toString('hex');
+  unlockTokens.set(token, now + TOKEN_TTL_MS);
+  return res.json({ locked: true, token });
+});
+
+// All other /api/* require a valid unlock token when the lock is enabled.
+app.use('/api', (req, res, next) => {
+  if (!APP_PASSWORD || hasValidToken(req)) return next();
+  return res.status(401).json({ error: 'locked' });
+});
 
 // Mirror successful API mutations to Postgres (debounced inside pgStore).
 app.use('/api', (req, res, next) => {

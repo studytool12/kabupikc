@@ -14,11 +14,50 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 4200);
 }
 
-async function api(path, opts) {
-  const r = await fetch(path, opts);
+// Unlock token: kept in page memory ONLY (never localStorage /
+// sessionStorage / Cookie), so a page reload drops it and the lock
+// screen comes back — the password must be entered again.
+let appToken = null;
+
+function showLock() {
+  appToken = null;
+  $('#lock-screen').classList.remove('hidden');
+  const pw = $('#lock-password');
+  pw.value = '';
+  setTimeout(() => pw.focus(), 0);
+}
+
+function hideLock() {
+  $('#lock-screen').classList.add('hidden');
+  $('#lock-error').textContent = '';
+}
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (appToken) headers['X-App-Token'] = appToken;
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401) { showLock(); throw new Error(`${path} -> 401`); }
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json();
 }
+
+$('#lock-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#lock-error').textContent = '';
+  try {
+    const r = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: $('#lock-password').value }),
+    });
+    if (!r.ok) { $('#lock-error').textContent = 'パスワードが違います'; return; }
+    const j = await r.json();
+    appToken = j.token;
+    $('#lock-password').value = '';
+    hideLock();
+    await loadAll();
+  } catch (err) { $('#lock-error').textContent = '通信に失敗しました'; }
+});
 
 function verdictBadge(v) {
   if (!v) return '<span class="badge none">未分析</span>';
@@ -300,4 +339,10 @@ document.querySelectorAll('#chart-range button').forEach((b) => b.addEventListen
 ['opt-bb', 'opt-ma', 'opt-rsi', 'opt-macd'].forEach((id) => $('#' + id).addEventListener('change', renderChart));
 window.addEventListener('resize', () => { if (state.view === 'chart') renderChart(); });
 
-loadAll().catch((e) => toast(`読み込み失敗: ${e.message}`));
+// Boot: the lock overlay is visible from the start. If the server has no
+// password configured, loadAll() succeeds and the overlay is hidden. If it
+// returns 401, api() has already (re)shown the lock screen and data loads
+// only after a successful unlock.
+loadAll()
+  .then(() => hideLock())
+  .catch((e) => { if (!String(e.message).includes('401')) toast(`読み込み失敗: ${e.message}`); });

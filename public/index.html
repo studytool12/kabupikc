@@ -7,6 +7,15 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="lock-screen">
+  <form id="lock-form" class="lock-box">
+    <h2>株ウォッチリスト</h2>
+    <p>パスワードを入力してください</p>
+    <input id="lock-password" type="password" placeholder="パスワード" autocomplete="off">
+    <button id="btn-unlock" type="submit" class="primary">解除</button>
+    <div id="lock-error"></div>
+  </form>
+</div>
 <header>
   <h1>株ウォッチリスト</h1>
   <div class="header-actions">
