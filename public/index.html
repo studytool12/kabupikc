@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="loading-screen">
+  <div class="spinner" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <p>読み込み中…</p>
+</div>
 <div id="lock-screen">
   <form id="lock-form" class="lock-box">
     <h2>株ウォッチリスト</h2>
@@ -36,6 +40,7 @@
   <button data-view="archive">アーカイブ（見送り）</button>
   <span id="clock" title="現在時刻（日本時間）"><span id="clock-date"></span><span id="clock-time">--:--:--</span></span>
 </nav>
+<div id="market-countdown" title="市場時間（前場 9:00〜11:30／後場 12:30〜15:30、平日）までの目安"></div>
 <main>
   <section id="view-watchlist" class="view">
     <div class="toolbar">

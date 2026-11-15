@@ -42,6 +42,12 @@ function passwordMatches(pw) {
 if (APP_PASSWORD) console.log('[auth] password lock enabled');
 
 app.use(express.json({ limit: '2mb' }));
+
+// Health check for external uptime monitors (keeps the free plan awake).
+// No auth, no DB, no I/O — answered before static files and the API guard.
+app.get('/ping', (req, res) => res.type('text/plain').send('OK'));
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Unlock endpoint (exempt from the token guard below).
@@ -160,6 +166,14 @@ app.post('/api/removed/:id/restore', (req, res) => {
   insertStock(rec);
   db.prepare('DELETE FROM removed_stocks WHERE id = ?').run(row.id);
   res.json({ ok: true, stock: rec });
+});
+
+// Permanently delete an archived stock (cannot be restored afterwards).
+// The mutation-mirror middleware above mirrors this to Postgres as well.
+app.delete('/api/removed/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM removed_stocks WHERE id = ?').run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'not found' });
+  res.json({ ok: true });
 });
 
 app.get('/api/stocks/:id/history', (req, res) => {

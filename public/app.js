@@ -32,6 +32,9 @@ function hideLock() {
   $('#lock-error').textContent = '';
 }
 
+function showLoading() { $('#loading-screen').classList.remove('hidden'); }
+function hideLoading() { $('#loading-screen').classList.add('hidden'); }
+
 async function api(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
   if (appToken) headers['X-App-Token'] = appToken;
@@ -44,21 +47,23 @@ async function api(path, opts = {}) {
 $('#lock-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('#lock-error').textContent = '';
+  showLoading();
   try {
     const r = await fetch('/api/unlock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: $('#lock-password').value }),
     });
-    if (!r.ok) { $('#lock-error').textContent = 'パスワードが違います'; return; }
+    if (!r.ok) { hideLoading(); $('#lock-error').textContent = 'パスワードが違います'; return; }
     const j = await r.json();
     appToken = j.token;
     $('#lock-password').value = '';
-    hideLock();
     await loadAll();
+    hideLock();
+    hideLoading();
     updateAutoStatus();
     pollOnce();
-  } catch (err) { $('#lock-error').textContent = '通信に失敗しました'; }
+  } catch (err) { hideLoading(); $('#lock-error').textContent = '通信に失敗しました'; }
 });
 
 // ---------- tags / sector helpers ----------
@@ -100,6 +105,12 @@ function sectorOf(s) {
 function parseTags(s) {
   if (!s.tags) return [];
   return String(s.tags).split(/[,、\s]+/).map((t) => t.trim()).filter(Boolean);
+}
+
+// External per-stock pages (Yahoo!ファイナンス / 株探), opened in a new tab.
+function extLinks(s) {
+  const code = encodeURIComponent(String(s.code));
+  return `<span class="ext-links"><a href="https://finance.yahoo.co.jp/quote/${code}.T" target="_blank" rel="noopener">Yahoo</a><a href="https://kabutan.jp/stock/?code=${code}" target="_blank" rel="noopener">株探</a></span>`;
 }
 
 function verdictBadge(v) {
@@ -202,7 +213,7 @@ function renderWatchlist() {
       const tags = parseTags(s).map((t) => `<span class="tag">${esc(t)}</span>`).join(' ');
       const memo = s.memo ? `<span class="memo-cell" title="${esc(s.memo)}">📝 ${esc(s.memo)}</span>` : '';
       return `<tr>
-      <td class="l" data-label="コード">${esc(s.code)}</td><td class="l" data-label="銘柄名">${esc(s.name)}${s.is_holding ? ' <span class="badge wait">保有</span>' : ''}</td>
+      <td class="l" data-label="コード">${esc(s.code)}</td><td class="l" data-label="銘柄名">${esc(s.name)}${s.is_holding ? ' <span class="badge wait">保有</span>' : ''} ${extLinks(s)}</td>
       <td data-label="現在価格" class="${flashCls(s).trim()}">${fmt(s.price, s.price < 100 ? 1 : 0)}</td>
       <td data-label="前日比%" class="${cls(s.price_change_percent)}${flashCls(s)}">${pct(s.price_change_percent)}</td>
       <td class="l" data-label="判断">${verdictBadge(s.verdict)}</td><td data-label="スコア">${fmt(s.score)}</td>
@@ -276,7 +287,7 @@ function renderHoldings() {
 }
 
 // ---------- sector pie chart (Canvas, no external deps) ----------
-const PIE_COLORS = ['#123c33', '#2e7d5b', '#66bb6a', '#ffd54f', '#ff8a65', '#4fc3f7', '#9575cd', '#f06292',
+const PIE_COLORS = ['#2f6db3', '#2e7d5b', '#66bb6a', '#ffd54f', '#ff8a65', '#4fc3f7', '#9575cd', '#f06292',
   '#a1887f', '#90a4ae', '#dce775', '#ffb74d', '#64b5f6', '#81c784', '#e57373', '#ba68c8', '#4db6ac', '#aed581'];
 
 function sectorEntries() {
@@ -388,7 +399,7 @@ function renderChart() {
   const all = state.prices[s.id] || [];
   const pts = state.chartRange > 0 ? all.slice(-state.chartRange) : all;
   $('#chart-meta').innerHTML =
-    `<b>${esc(s.code)} ${esc(s.name)}</b> 現在 ${fmt(s.price, s.price < 100 ? 1 : 0)}円
+    `<b>${esc(s.code)} ${esc(s.name)}</b> ${extLinks(s)} 現在 ${fmt(s.price, s.price < 100 ? 1 : 0)}円
      <span class="${cls(s.price_change_percent)}">${pct(s.price_change_percent)}</span>
      ${verdictBadge(s.verdict)} スコア ${fmt(s.score)} / 第一 ${fmt(s.entry_price)} / 損切り ${fmt(s.stop_price)} / 利確 ${fmt(s.target_price)}
      <span class="small">（${pts.length}営業日分を表示）</span>`;
@@ -436,11 +447,17 @@ function renderQueue() {
 function renderArchive() {
   $('#table-archive').innerHTML =
     '<tr><th class="l">コード</th><th class="l">銘柄名</th><th class="l">削除日時</th><th class="l">削除前の判断</th><th class="l">メモ（抜粋）</th><th></th></tr>' +
-    (state.removed.map((r) => `<tr><td class="l" data-label="コード">${esc(r.code)}</td><td class="l" data-label="銘柄名">${esc(r.name)}</td><td class="l" data-label="削除日時">${esc((r.removed_at || '').slice(0, 10))}</td><td class="l" data-label="削除前の判断">${esc(r.prev_verdict || r.verdict || '-')}</td><td class="l memo-wrap" data-label="メモ（抜粋）">${esc((r.prev_memo || r.memo || '').slice(0, 140))}</td><td class="l cell-action"><button data-restore="${r.archive_id}">復元</button></td></tr>`).join('') ||
+    (state.removed.map((r) => `<tr><td class="l" data-label="コード">${esc(r.code)}</td><td class="l" data-label="銘柄名">${esc(r.name)}</td><td class="l" data-label="削除日時">${esc((r.removed_at || '').slice(0, 10))}</td><td class="l" data-label="削除前の判断">${esc(r.prev_verdict || r.verdict || '-')}</td><td class="l memo-wrap" data-label="メモ（抜粋）">${esc((r.prev_memo || r.memo || '').slice(0, 140))}</td><td class="l cell-action"><button data-restore="${r.archive_id}">復元</button> <button data-purge="${r.archive_id}" class="danger">削除</button></td></tr>`).join('') ||
       '<tr><td class="l" colspan="6">アーカイブはありません。</td></tr>');
   document.querySelectorAll('[data-restore]').forEach((b) => b.addEventListener('click', async () => {
     await api(`/api/removed/${b.dataset.restore}/restore`, { method: 'POST' });
     toast('復元しました');
+    await loadAll();
+  }));
+  document.querySelectorAll('[data-purge]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('このアーカイブ銘柄を完全に削除しますか？\n削除すると復元できなくなります。')) return;
+    await api(`/api/removed/${b.dataset.purge}`, { method: 'DELETE' });
+    toast('完全に削除しました');
     await loadAll();
   }));
 }
@@ -565,12 +582,51 @@ window.addEventListener('resize', () => {
 // own timer, independent of the lock state and the data polling.
 const clockTimeFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 const clockDateFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short' });
+// ---------- market session countdown (JST) ----------
+// Displayed in its own row under the clock; the clock slot itself is never
+// touched by this code. Sessions (weekdays only, holidays ignored — same
+// treatment as the server auto-refresh): 前場 9:00-11:30, 後場 12:30-15:30.
+// After the close (or on weekends) the target rolls to the next weekday.
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const SESSION_MARKS = [
+  { label: '前場開始まで', off: 9 * 3600e3, past: '開始済' },
+  { label: '前場終了まで', off: 11.5 * 3600e3, past: '終了' },
+  { label: '後場開始まで', off: 12.5 * 3600e3, past: '開始済' },
+  { label: '後場終了まで', off: 15.5 * 3600e3, past: '終了' },
+];
+function jstDayStart(ms) { return Math.floor((ms + JST_OFFSET_MS) / 86400e3) * 86400e3 - JST_OFFSET_MS; }
+function jstWeekday(dayStartMs) { return new Date(dayStartMs + JST_OFFSET_MS).getUTCDay(); }
+function remainText(targetMs, nowMs) {
+  const sec = Math.max(0, Math.floor((targetMs - nowMs) / 1000));
+  return `あと${Math.floor(sec / 3600)}時間${Math.floor((sec % 3600) / 60)}分`;
+}
+function tickCountdown() {
+  const el = $('#market-countdown');
+  if (!el) return;
+  const nowMs = Date.now();
+  const todayStart = jstDayStart(nowMs);
+  let day = todayStart;
+  const wd = jstWeekday(day);
+  if (wd === 0 || wd === 6 || nowMs >= day + SESSION_MARKS[3].off) {
+    do { day += 86400e3; } while (jstWeekday(day) === 0 || jstWeekday(day) === 6);
+  }
+  const isToday = day === todayStart;
+  const items = SESSION_MARKS.map((m) => {
+    const t = day + m.off;
+    const val = (isToday && nowMs >= t) ? m.past : remainText(t, nowMs);
+    return `<span class="mc-item">${m.label} <b>${val}</b></span>`;
+  });
+  const prefix = isToday ? '' : `<span class="mc-item mc-day">${clockDateFmt.format(new Date(day + 12 * 3600e3))}の市場</span>`;
+  el.innerHTML = prefix + items.join('');
+}
+
 function tickClock() {
   const now = new Date();
   const t = $('#clock-time');
   if (t) t.textContent = clockTimeFmt.format(now);
   const d = $('#clock-date');
   if (d) d.textContent = clockDateFmt.format(now);
+  tickCountdown();
 }
 tickClock();
 setInterval(tickClock, 1000);
@@ -626,5 +682,5 @@ setInterval(pollOnce, POLL_MS);
 // returns 401, api() has already (re)shown the lock screen and data loads
 // only after a successful unlock.
 loadAll()
-  .then(() => { hideLock(); updateAutoStatus(); pollOnce(); })
-  .catch((e) => { if (!String(e.message).includes('401')) toast(`読み込み失敗: ${e.message}`); });
+  .then(() => { hideLock(); hideLoading(); updateAutoStatus(); pollOnce(); })
+  .catch((e) => { hideLoading(); if (!String(e.message).includes('401')) toast(`読み込み失敗: ${e.message}`); });
