@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>株ウォッチリスト</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>株ウォッチリスト</h1>
+  <div class="header-actions">
+    <span id="summary-line"></span>
+    <button id="btn-refresh">価格更新</button>
+    <button id="btn-add">＋ 銘柄追加</button>
+  </div>
+</header>
+<nav id="tabs">
+  <button data-view="watchlist" class="active">ウォッチリスト</button>
+  <button data-view="movements">値動き</button>
+  <button data-view="holdings">保有銘柄</button>
+  <button data-view="chart">チャート</button>
+  <button data-view="actions">要対応</button>
+  <button data-view="queue">未分析キュー</button>
+  <button data-view="archive">アーカイブ（見送り）</button>
+</nav>
+<main>
+  <section id="view-watchlist" class="view">
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="銘柄名・コードで検索">
+      <select id="verdict-filter"><option value="">判断：すべて</option></select>
+      <label><input type="checkbox" id="only-holdings"> 保有のみ</label>
+    </div>
+    <div class="table-wrap"><table id="table-watchlist"></table></div>
+  </section>
+
+  <section id="view-movements" class="view hidden">
+    <div class="table-wrap"><table id="table-movements"></table></div>
+  </section>
+
+  <section id="view-holdings" class="view hidden">
+    <div id="holdings-summary" class="cards"></div>
+    <div class="table-wrap"><table id="table-holdings"></table></div>
+  </section>
+
+  <section id="view-chart" class="view hidden">
+    <div class="toolbar">
+      <select id="chart-stock"></select>
+      <div class="seg" id="chart-range">
+        <button data-range="63">3か月</button>
+        <button data-range="126">6か月</button>
+        <button data-range="252" class="active">1年</button>
+        <button data-range="0">全期間</button>
+      </div>
+      <label><input type="checkbox" id="opt-bb" checked> ボリンジャー</label>
+      <label><input type="checkbox" id="opt-ma" checked> 75日線</label>
+      <label><input type="checkbox" id="opt-rsi" checked> RSI</label>
+      <label><input type="checkbox" id="opt-macd" checked> MACD</label>
+    </div>
+    <div id="chart-meta"></div>
+    <canvas id="chart-canvas"></canvas>
+    <div id="chart-report"></div>
+  </section>
+
+  <section id="view-actions" class="view hidden">
+    <div id="actions-list"></div>
+  </section>
+
+  <section id="view-queue" class="view hidden">
+    <div class="table-wrap"><table id="table-queue"></table></div>
+  </section>
+
+  <section id="view-archive" class="view hidden">
+    <div class="table-wrap"><table id="table-archive"></table></div>
+  </section>
+</main>
+
+<dialog id="edit-dialog">
+  <form id="edit-form" method="dialog">
+    <h2 id="edit-title">銘柄編集</h2>
+    <div class="form-grid">
+      <label>コード<input name="code" required></label>
+      <label>銘柄名<input name="name" required></label>
+      <label>判断<input name="verdict" list="verdict-list" placeholder="押し目待ち など">
+        <datalist id="verdict-list">
+          <option value="強い買い"><option value="買い"><option value="押し目待ち">
+          <option value="ブレイクアウト待ち"><option value="監視継続"><option value="見送り"><option value="未分析">
+        </datalist></label>
+      <label>スコア<input name="score" type="number" step="0.1" min="0" max="100"></label>
+      <label>現在価格<input name="price" type="number" step="0.1"></label>
+      <label>第一エントリー<input name="entry_price" type="number" step="0.1"></label>
+      <label>第二エントリー<input name="entry2_price" type="number" step="0.1"></label>
+      <label>損切り<input name="stop_price" type="number" step="0.1"></label>
+      <label>利確目安<input name="target_price" type="number" step="0.1"></label>
+      <label>保有株数<input name="shares" type="number" step="1"></label>
+      <label>平均取得単価<input name="avg_cost" type="number" step="0.1"></label>
+      <label>最終分析日<input name="last_analysis_date" type="date"></label>
+      <label>タグ<input name="tags" placeholder="カンマ区切り"></label>
+      <label class="wide">保有期間・方針<input name="holding_period"></label>
+      <label class="wide">メモ<textarea name="memo" rows="3"></textarea></label>
+      <label class="wide">分析レポート<textarea name="report" rows="8"></textarea></label>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="btn-delete" class="danger">削除（アーカイブへ）</button>
+      <span class="spacer"></span>
+      <button type="button" id="btn-cancel">キャンセル</button>
+      <button type="submit" id="btn-save" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+<script src="chart.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

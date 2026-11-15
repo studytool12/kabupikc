@@ -1,0 +1,15 @@
+# Render Blueprint: 株ウォッチリスト（無料プラン前提）
+# データの正は無料Postgres（Neon）の DATABASE_URL。Render 側に Persistent
+# Disk は無いため、SQLite はアプリ内のワーキングストアとしてのみ使う
+# （再デプロイ・再起動のたびに Postgres から読み直される）。
+services:
+  - type: web
+    name: stock-watchlist
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Render ダッシュボードで Neon の接続文字列を直接設定する（実値はここに書かない）
+      - key: APP_PASSWORD
+        sync: false # Render ダッシュボードで値を設定する（Basic認証用。未設定なら認証なし）

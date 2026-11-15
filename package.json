@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.19.2","pg":"^8.23.1"},"description":"株ウォッチリスト（MuseスペースからRenderへフル移行）","engines":{"node":">=22.5"},"main":"server.js","name":"stock-watchlist","private":true,"scripts":{"start":"node server.js"},"version":"1.0.0"}
