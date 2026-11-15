@@ -1,5 +1,5 @@
 'use strict';
-const state = { stocks: [], prices: {}, removed: [], view: 'watchlist', sortKey: 'code', sortDir: 1, chartRange: 252, chartId: null, sectorMode: 'holdings', flash: new Map(), fingerprint: null, lastCheckedAt: null };
+const state = { stocks: [], prices: {}, removed: [], view: 'watchlist', sortKey: 'code', sortDir: 1, chartRange: 252, chartId: null, sectorMode: 'holdings', flash: new Map(), fingerprint: null, lastCheckedAt: null, chartHover: null, chartPts: [], chartAll: [], chartStockObj: null };
 
 const $ = (s) => document.querySelector(s);
 const fmt = (v, d = 0) => (v == null || v === '' || Number.isNaN(Number(v)) ? '-' : Number(v).toLocaleString('ja-JP', { maximumFractionDigits: d, minimumFractionDigits: 0 }));
@@ -253,6 +253,10 @@ function renderMovements() {
 
 // ---------- holdings / portfolio ----------
 function renderHoldings() {
+  // Any open quick-entry panel belongs to a previous render; close it.
+  const qp = $('#quick-panel');
+  if (qp) qp.classList.add('hidden');
+  quick = null;
   const holds = state.stocks.filter((s) => s.is_holding || (s.shares ?? 0) > 0);
   let totalVal = 0, totalCost = 0, totalPl = 0, hasCost = false;
   const rows = holds.map((s) => {
@@ -274,17 +278,78 @@ function renderHoldings() {
      <div class="card"><div class="k">含み損益合計</div><div class="v ${cls(hasCost ? totalPl : null)}">${hasCost ? fmt(totalPl) + '円' : '-'}</div></div>
      <div class="card"><div class="k">含み損益率</div><div class="v ${cls(totalPlPct)}">${totalPlPct != null ? pct(totalPlPct) : '-'}</div></div>`;
   $('#table-holdings').innerHTML =
-    '<tr><th class="l">コード</th><th class="l">銘柄名</th><th class="l">セクター</th><th>株数</th><th>平均取得単価</th><th>現在価格</th><th>評価額</th><th>評価損益</th><th>損益率</th><th class="l">判断</th></tr>' +
+    '<tr><th class="l">コード</th><th class="l">銘柄名</th><th class="l">セクター</th><th>株数</th><th>平均取得単価</th><th>現在価格</th><th>評価額</th><th>評価損益</th><th>損益率</th><th class="l">判断</th><th class="l">買値・買い増し</th></tr>' +
     rows.map(({ s, val, pl, plPct }) => `<tr>
       <td class="l" data-label="コード">${esc(s.code)}</td><td class="l" data-label="銘柄名">${esc(s.name)}</td><td class="l" data-label="セクター">${esc(sectorOf(s))}</td><td data-label="株数">${fmt(s.shares)}</td>
       <td data-label="平均取得単価">${s.avg_cost != null ? fmt(s.avg_cost, 1) : '<span class="small">未設定</span>'}</td>
       <td data-label="現在価格" class="${flashCls(s).trim()}">${fmt(s.price, s.price < 100 ? 1 : 0)}</td><td data-label="評価額" class="${flashCls(s).trim()}">${fmt(val)}</td>
       <td data-label="評価損益" class="${cls(pl)}${flashCls(s)}">${pl != null ? fmt(pl) : '-'}</td>
       <td data-label="損益率" class="${cls(plPct)}">${plPct != null ? pct(plPct) : '-'}</td>
-      <td class="l" data-label="判断">${verdictBadge(s.verdict)}</td></tr>`).join('');
+      <td class="l" data-label="判断">${verdictBadge(s.verdict)}</td>
+      <td class="l quick-cell"><button data-costbtn="${s.id}">買値</button> <button data-addbtn="${s.id}">買い増し</button></td></tr>`).join('');
+  document.querySelectorAll('[data-costbtn]').forEach((b) => b.addEventListener('click', () => openQuick(Number(b.dataset.costbtn), 'cost')));
+  document.querySelectorAll('[data-addbtn]').forEach((b) => b.addEventListener('click', () => openQuick(Number(b.dataset.addbtn), 'add')));
   renderSectorPie();
-  renderSim();
 }
+
+// ---------- quick entry: 買値 (avg cost) / 買い増し (add shares) ----------
+// Saves through the existing partial-update PUT /api/stocks/:id, then a full
+// reload re-renders the holdings summary (評価額・含み損益) immediately.
+let quick = null;
+
+function openQuick(id, mode) {
+  const s = state.stocks.find((x) => x.id === id);
+  if (!s) return;
+  quick = { id, mode };
+  const panel = $('#quick-panel');
+  $('#quick-title').textContent = mode === 'cost'
+    ? `買値の登録：${s.code} ${s.name}`
+    : `買い増しの登録：${s.code} ${s.name}`;
+  $('#quick-fields').innerHTML = mode === 'cost'
+    ? `<label>平均取得単価（円）<input id="quick-cost" type="number" min="0" step="0.1" value="${s.avg_cost ?? ''}" placeholder="例：1500"></label>
+       <span class="small">現在の保有株数：${fmt(s.shares)}株</span>`
+    : `<label>追加した株数<input id="quick-add-shares" type="number" min="0" step="1" placeholder="例：100"></label>
+       <label>その取得単価（円）<input id="quick-add-price" type="number" min="0" step="0.1" placeholder="例：1620"></label>
+       <span class="small">現在：${fmt(s.shares)}株／平均 ${s.avg_cost != null ? fmt(s.avg_cost, 1) + '円' : '未設定'}（保存時に加重平均で再計算します）</span>`;
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const first = panel.querySelector('input');
+  if (first) first.focus();
+}
+
+$('#quick-cancel').addEventListener('click', () => {
+  quick = null;
+  $('#quick-panel').classList.add('hidden');
+});
+
+$('#quick-save').addEventListener('click', async () => {
+  if (!quick) return;
+  const s = state.stocks.find((x) => x.id === quick.id);
+  if (!s) return;
+  let body;
+  if (quick.mode === 'cost') {
+    const v = Number($('#quick-cost').value);
+    if (!v || v <= 0) { toast('平均取得単価を入力してください'); return; }
+    body = { avg_cost: v };
+  } else {
+    const addSh = Number($('#quick-add-shares').value);
+    const addPr = Number($('#quick-add-price').value);
+    if (!addSh || addSh <= 0 || !addPr || addPr <= 0) { toast('追加した株数と取得単価を入力してください'); return; }
+    const oldSh = s.shares ?? 0;
+    const newSh = oldSh + addSh;
+    // Weighted average; if the old average is unknown, the new lot's price
+    // is the only cost information available, so it becomes the average.
+    const newAvg = s.avg_cost == null ? addPr : (oldSh * s.avg_cost + addSh * addPr) / newSh;
+    body = { shares: newSh, avg_cost: Math.round(newAvg * 100) / 100, is_holding: true };
+  }
+  try {
+    await api(`/api/stocks/${quick.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    toast(quick.mode === 'cost' ? '買値を保存しました' : '買い増しを保存しました');
+    quick = null;
+    $('#quick-panel').classList.add('hidden');
+    await loadAll();
+  } catch (e) { toast(`保存に失敗: ${e.message}`); }
+});
 
 // ---------- sector pie chart (Canvas, no external deps) ----------
 const PIE_COLORS = ['#2f6db3', '#2e7d5b', '#66bb6a', '#ffd54f', '#ff8a65', '#4fc3f7', '#9575cd', '#f06292',
@@ -404,11 +469,82 @@ function renderChart() {
      ${verdictBadge(s.verdict)} スコア ${fmt(s.score)} / 第一 ${fmt(s.entry_price)} / 損切り ${fmt(s.stop_price)} / 利確 ${fmt(s.target_price)}
      <span class="small">（${pts.length}営業日分を表示）</span>`;
   $('#chart-report').textContent = s.report || '（分析レポートなし）';
-  drawChart($('#chart-canvas'), pts, {
+  state.chartPts = pts;
+  state.chartAll = all;
+  state.chartStockObj = s;
+  state.chartHover = null;
+  $('#chart-tip').classList.add('hidden');
+  paintChart();
+}
+
+function paintChart() {
+  const s = state.chartStockObj;
+  if (!s) return;
+  drawChart($('#chart-canvas'), state.chartPts, {
     bollinger: $('#opt-bb').checked, ma75: $('#opt-ma').checked,
     rsi: $('#opt-rsi').checked, macd: $('#opt-macd').checked,
     entry: s.entry_price, stop: s.stop_price, target: s.target_price,
+    hoverIdx: state.chartHover,
   });
+}
+
+// ---------- chart crosshair / detail tooltip ----------
+// Pointer (mouse + touch) over the canvas: the nearest data point gets a
+// crosshair and a tooltip with that day's OHLC / change% / volume. The
+// tooltip lives only while pointing; releasing or leaving hides it.
+function chartIndexFromEvent(e) {
+  const canvas = $('#chart-canvas');
+  const g = canvas._geom;
+  if (!g || !state.chartPts.length) return null;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const i = Math.round(((x - g.left) / g.plotW) * g.n - 0.5);
+  return Math.max(0, Math.min(g.n - 1, i));
+}
+
+function showChartTip(i) {
+  const tip = $('#chart-tip');
+  const pts = state.chartPts, all = state.chartAll;
+  const p = pts[i];
+  if (!p) { tip.classList.add('hidden'); return; }
+  const prev = all[all.length - pts.length + i - 1];
+  const chg = prev && prev.price ? ((p.price - prev.price) / prev.price) * 100 : null;
+  const dec = p.price < 100 ? 1 : 0;
+  const o = p.open ?? p.price, h = p.high ?? Math.max(o, p.price), l = p.low ?? Math.min(o, p.price);
+  tip.innerHTML =
+    `<div class="tt-date">${esc(p.date)}</div>` +
+    `<div>始値 ${fmt(o, dec)}　高値 ${fmt(h, dec)}</div>` +
+    `<div>安値 ${fmt(l, dec)}　終値 ${fmt(p.price, dec)}</div>` +
+    `<div>前日比 <span class="${cls(chg)}">${chg != null ? pct(chg) : '-'}</span></div>` +
+    `<div>出来高 ${p.volume != null ? fmt(p.volume) : '-'}</div>`;
+  tip.classList.remove('hidden');
+  // Follow the point horizontally; flip to the left side near the right edge.
+  const canvas = $('#chart-canvas');
+  const g = canvas._geom;
+  const wrapW = canvas.clientWidth;
+  const gx = g.left + (g.plotW * (i + 0.5)) / g.n;
+  const tw = tip.offsetWidth;
+  tip.style.left = `${gx > wrapW * 0.55 ? Math.max(0, gx - tw - 12) : Math.min(wrapW - tw, gx + 12)}px`;
+}
+
+function chartPointTo(i) {
+  if (i == null) return;
+  if (i !== state.chartHover) { state.chartHover = i; paintChart(); }
+  showChartTip(i);
+}
+
+function clearChartHover() {
+  if (state.chartHover != null) { state.chartHover = null; paintChart(); }
+  $('#chart-tip').classList.add('hidden');
+}
+
+{
+  const canvas = $('#chart-canvas');
+  canvas.addEventListener('pointerdown', (e) => { if (state.view === 'chart') chartPointTo(chartIndexFromEvent(e)); });
+  canvas.addEventListener('pointermove', (e) => { if (state.view === 'chart') chartPointTo(chartIndexFromEvent(e)); });
+  canvas.addEventListener('pointerleave', clearChartHover);
+  canvas.addEventListener('pointerup', clearChartHover);
+  canvas.addEventListener('pointercancel', clearChartHover);
 }
 
 // ---------- actions (要対応) ----------
@@ -476,7 +612,7 @@ function render() {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view));
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   $(`#view-${state.view}`).classList.remove('hidden');
-  ({ watchlist: renderWatchlist, movements: renderMovements, holdings: renderHoldings, chart: renderChart, actions: renderActions, queue: renderQueue, archive: renderArchive })[state.view]();
+  ({ watchlist: renderWatchlist, movements: renderMovements, holdings: renderHoldings, simulation: renderSim, chart: renderChart, actions: renderActions, queue: renderQueue, archive: renderArchive })[state.view]();
 }
 
 // ---------- edit dialog ----------

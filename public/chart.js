@@ -78,12 +78,17 @@ function fmtNum(v, digits = 0) {
 /**
  * drawChart(canvas, points, opts)
  * points: [{date, open, high, low, price(close), volume}]
- * opts: {ma75:bool, bollinger:bool, rsi:bool, macd:bool, entry, stop, target}
+ * opts: {ma75:bool, bollinger:bool, rsi:bool, macd:bool, entry, stop, target,
+ *        hoverIdx:number|null} — when hoverIdx is set, a crosshair (vertical
+ *        line across all panels + horizontal line at that day's close on the
+ *        main panel + marker) is drawn for that data point.
+ * The plot geometry is stored on canvas._geom so callers can convert a
+ * pointer x-coordinate back into a data index.
  */
 function drawChart(canvas, points, opts = {}) {
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth, H = canvas.clientHeight;
-  if (!W || !H || !points.length) return;
+  if (!W || !H || !points.length) { canvas._geom = null; return; }
   canvas.width = W * dpr; canvas.height = H * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -211,4 +216,29 @@ function drawChart(canvas, points, opts = {}) {
     ctx.fillText(points[i].date.slice(0, 7), xAt(i) - 14, H - 3);
   }
   ctx.fillStyle = '#666';
+
+  // ---- crosshair for the hovered / touched data point ----
+  canvas._geom = { n, plotW, left: 4 };
+  if (opts.hoverIdx != null && points[opts.hoverIdx]) {
+    const i = opts.hoverIdx;
+    const X = xAt(i);
+    const main = panels[0];
+    const lastPanel = panels[panels.length - 1];
+    ctx.strokeStyle = 'rgba(70,70,70,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(X, main.y0); ctx.lineTo(X, lastPanel.y0 + lastPanel.hPx); ctx.stroke();
+    if (main.yFor) {
+      const Y = main.yFor(points[i].price);
+      ctx.beginPath(); ctx.moveTo(4, Y); ctx.lineTo(4 + plotW, Y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(X, Y, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.beginPath(); ctx.arc(X, Y, 2.5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#666';
+  }
 }

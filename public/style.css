@@ -46,7 +46,11 @@ tr:hover td { background: #f4f8fb; }
 .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; min-width: 160px; }
 .card .k { font-size: 11px; color: #777; }
 .card .v { font-size: 18px; font-weight: 700; }
-#chart-canvas { width: 100%; height: 560px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+#chart-canvas { width: 100%; height: 560px; background: #fff; border: 1px solid #ddd; border-radius: 8px; touch-action: pan-y; cursor: crosshair; }
+.chart-wrap { position: relative; }
+.chart-tip { position: absolute; top: 8px; z-index: 5; background: rgba(255,255,255,.97); border: 1px solid #c3c8cd; border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.55; pointer-events: none; box-shadow: 0 2px 8px rgba(30,40,50,.14); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chart-tip.hidden { display: none; }
+.chart-tip .tt-date { font-weight: 700; margin-bottom: 2px; }
 #chart-meta { margin-bottom: 6px; font-size: 13px; }
 #chart-report { margin-top: 10px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 13px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
 .seg button.active { background: #2f6db3; color: #fff; border-color: #2f6db3; }
@@ -128,6 +132,10 @@ td.flash-down { animation: flashDown 1.6s ease-out; }
 .sim-form input, .sim-form select { padding: 7px; border: 1px solid #bbb; border-radius: 6px; font-size: 14px; }
 .sim-result { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; min-height: 20px; }
 
+/* ---- holdings quick entry (買値 / 買い増し) ---- */
+#quick-panel.hidden { display: none; }
+.quick-cell button { white-space: nowrap; }
+
 /* ---- mobile (<=768px): tables become cards ---- */
 @media (max-width: 768px) {
   header { padding: 10px 12px; }
@@ -168,6 +176,9 @@ td.flash-down { animation: flashDown 1.6s ease-out; }
   .form-grid input, .form-grid textarea { font-size: 15px; padding: 9px; }
   dialog { width: 96vw; max-height: 92vh; overflow-y: auto; }
   .pie-flex { flex-direction: column; align-items: flex-start; }
+  .table-wrap table td.quick-cell { justify-content: flex-end; gap: 8px; }
+  .table-wrap table td.quick-cell::before { content: none; }
+  .table-wrap table td.quick-cell button { flex: 1; min-height: 40px; }
   #sector-canvas { width: 230px; height: 230px; }
   .sim-form label { flex: 1 1 42%; }
   .action-group { padding: 10px; }

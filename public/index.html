@@ -34,6 +34,7 @@
   <button data-view="watchlist" class="active">ウォッチリスト</button>
   <button data-view="movements">値動き</button>
   <button data-view="holdings">保有銘柄</button>
+  <button data-view="simulation">シミュレーション</button>
   <button data-view="chart">チャート</button>
   <button data-view="actions">要対応</button>
   <button data-view="queue">未分析キュー</button>
@@ -59,6 +60,14 @@
   <section id="view-holdings" class="view hidden">
     <div id="holdings-summary" class="cards"></div>
     <div class="table-wrap"><table id="table-holdings"></table></div>
+    <div id="quick-panel" class="panel hidden">
+      <h3 id="quick-title"></h3>
+      <div class="sim-form" id="quick-fields"></div>
+      <div class="dialog-actions">
+        <button type="button" id="quick-cancel">キャンセル</button>
+        <button type="button" id="quick-save" class="primary">保存</button>
+      </div>
+    </div>
     <div class="panel">
       <div class="panel-head">
         <h3>セクター別割合</h3>
@@ -72,6 +81,9 @@
         <div id="sector-legend"></div>
       </div>
     </div>
+  </section>
+
+  <section id="view-simulation" class="view hidden">
     <div class="panel">
       <h3>損益シミュレーション（その場の計算のみ・保存されません）</h3>
       <div class="sim-form">
@@ -98,7 +110,10 @@
       <label><input type="checkbox" id="opt-macd" checked> MACD</label>
     </div>
     <div id="chart-meta"></div>
-    <canvas id="chart-canvas"></canvas>
+    <div class="chart-wrap">
+      <canvas id="chart-canvas"></canvas>
+      <div id="chart-tip" class="chart-tip hidden"></div>
+    </div>
     <div id="chart-report"></div>
   </section>
 
