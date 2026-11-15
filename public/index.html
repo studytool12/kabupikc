@@ -20,6 +20,8 @@
   <h1>株ウォッチリスト</h1>
   <div class="header-actions">
     <span id="summary-line"></span>
+    <span id="auto-status" title="取引時間中（平日9:00〜15:30）はサーバーが3分ごとに価格を自動更新し、この画面は1分ごとに再読み込みします">自動更新：確認中…</span>
+    <label class="auto-toggle"><input type="checkbox" id="auto-toggle" checked> 自動更新</label>
     <button id="btn-refresh">価格更新</button>
     <button id="btn-add">＋ 銘柄追加</button>
   </div>
@@ -38,6 +40,7 @@
     <div class="toolbar">
       <input id="search" type="search" placeholder="銘柄名・コードで検索">
       <select id="verdict-filter"><option value="">判断：すべて</option></select>
+      <select id="tag-filter"><option value="">タグ：すべて</option></select>
       <label><input type="checkbox" id="only-holdings"> 保有のみ</label>
     </div>
     <div class="table-wrap"><table id="table-watchlist"></table></div>
@@ -50,6 +53,28 @@
   <section id="view-holdings" class="view hidden">
     <div id="holdings-summary" class="cards"></div>
     <div class="table-wrap"><table id="table-holdings"></table></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>セクター別割合</h3>
+        <div class="seg" id="sector-mode">
+          <button data-mode="holdings" class="active">保有（評価額）</button>
+          <button data-mode="all">全体（銘柄数）</button>
+        </div>
+      </div>
+      <div class="pie-flex">
+        <canvas id="sector-canvas" width="260" height="260"></canvas>
+        <div id="sector-legend"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>損益シミュレーション（その場の計算のみ・保存されません）</h3>
+      <div class="sim-form">
+        <label>銘柄 <select id="sim-stock"></select></label>
+        <label>株数 <input id="sim-shares" type="number" min="0" step="1" value="100"></label>
+        <label>買値（円） <input id="sim-cost" type="number" min="0" step="0.1" placeholder="取得単価"></label>
+      </div>
+      <div id="sim-result" class="sim-result"></div>
+    </div>
   </section>
 
   <section id="view-chart" class="view hidden">
@@ -104,7 +129,19 @@
       <label>保有株数<input name="shares" type="number" step="1"></label>
       <label>平均取得単価<input name="avg_cost" type="number" step="0.1"></label>
       <label>最終分析日<input name="last_analysis_date" type="date"></label>
-      <label>タグ<input name="tags" placeholder="カンマ区切り"></label>
+      <label>タグ<input name="tags" placeholder="カンマ区切り（例：高配当, 成長株）"></label>
+      <label>セクター（業種）<input name="sector" list="sector-list" placeholder="電気機器 など">
+        <datalist id="sector-list">
+          <option value="水産・農林業"><option value="鉱業"><option value="建設業"><option value="食料品">
+          <option value="繊維製品"><option value="パルプ・紙"><option value="化学"><option value="医薬品">
+          <option value="石油・石炭製品"><option value="ゴム製品"><option value="ガラス・土石製品"><option value="鉄鋼">
+          <option value="非鉄金属"><option value="金属製品"><option value="機械"><option value="電気機器">
+          <option value="輸送用機器"><option value="精密機器"><option value="その他製品"><option value="電気・ガス業">
+          <option value="陸運業"><option value="海運業"><option value="空運業"><option value="倉庫・運輸関連業">
+          <option value="情報・通信業"><option value="卸売業"><option value="小売業"><option value="銀行業">
+          <option value="証券、商品先物取引業"><option value="保険業"><option value="その他金融業"><option value="不動産業">
+          <option value="サービス業">
+        </datalist></label>
       <label class="wide">保有期間・方針<input name="holding_period"></label>
       <label class="wide">メモ<textarea name="memo" rows="3"></textarea></label>
       <label class="wide">分析レポート<textarea name="report" rows="8"></textarea></label>

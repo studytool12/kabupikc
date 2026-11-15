@@ -89,7 +89,7 @@ app.get('/api/stocks/:id', (req, res) => {
 
 const EDITABLE = ['code', 'name', 'verdict', 'score', 'price', 'entry_price', 'entry2_price',
   'stop_price', 'target_price', 'shares', 'avg_cost', 'is_holding', 'tags', 'memo', 'report',
-  'last_analysis_date', 'holding_period'];
+  'last_analysis_date', 'holding_period', 'sector'];
 
 app.post('/api/stocks', (req, res) => {
   const body = req.body || {};
@@ -214,13 +214,16 @@ async function fetchYahoo(code) {
 }
 
 let refreshing = false;
-app.post('/api/refresh', async (req, res) => {
-  if (refreshing) return res.status(409).json({ error: 'refresh already running' });
+
+// Core refresh routine shared by POST /api/refresh and the market-hours
+// auto-refresh scheduler below. Throws {status:409} if a run is in flight.
+async function runPriceRefresh(codes) {
+  if (refreshing) { const e = new Error('refresh already running'); e.status = 409; throw e; }
   refreshing = true;
   try {
     let stocks = db.prepare('SELECT * FROM stocks ORDER BY code').all().map(rowToStock);
-    if (req.body && Array.isArray(req.body.codes) && req.body.codes.length) {
-      const want = new Set(req.body.codes.map(String));
+    if (Array.isArray(codes) && codes.length) {
+      const want = new Set(codes.map(String));
       stocks = stocks.filter((s) => want.has(String(s.code)));
     }
     const ins = db.prepare(
@@ -264,10 +267,61 @@ app.post('/api/refresh', async (req, res) => {
         }
       }));
     }
-    res.json({ ok: true, updated, total: stocks.length, addedPoints, failures });
+    return { ok: true, updated, total: stocks.length, addedPoints, failures };
   } finally {
     refreshing = false;
   }
+}
+
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const codes = req.body && Array.isArray(req.body.codes) ? req.body.codes : undefined;
+    res.json(await runPriceRefresh(codes));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: String(e.message || e) });
+  }
+});
+
+// ---------------- Auto refresh during TSE market hours ----------------
+// Weekdays 09:00–15:30 JST (holidays not accounted for), every 3 minutes.
+// Yahoo fetching is heavy, so this stays coarse; the client polls /api data
+// every minute and picks up whatever the latest server-side run produced.
+const AUTO_REFRESH_MS = 3 * 60 * 1000;
+let lastAutoRefreshAt = null;
+
+function tokyoNow() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+}
+
+function isMarketOpen(d = tokyoNow()) {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = d.getHours() * 60 + d.getMinutes();
+  return mins >= 9 * 60 && mins <= 15 * 60 + 30;
+}
+
+setInterval(async () => {
+  if (!isMarketOpen() || refreshing) return;
+  try {
+    const r = await runPriceRefresh();
+    lastAutoRefreshAt = new Date().toISOString();
+    console.log(`[auto-refresh] updated ${r.updated}/${r.total} stocks, +${r.addedPoints} points`);
+    // Server-side writes bypass the HTTP mutation middleware, so mirror
+    // to Postgres explicitly.
+    if (pgStore.enabled) pgStore.scheduleSave();
+  } catch (e) {
+    console.warn('[auto-refresh] failed:', String(e.message || e));
+  }
+}, AUTO_REFRESH_MS);
+
+app.get('/api/status', (req, res) => {
+  res.json({
+    marketOpen: isMarketOpen(),
+    autoRefreshIntervalMs: AUTO_REFRESH_MS,
+    lastAutoRefreshAt,
+    refreshing,
+    serverTime: new Date().toISOString(),
+  });
 });
 
 // Flush any pending Postgres save before the process goes away
