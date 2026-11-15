@@ -586,7 +586,9 @@ const clockDateFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', 
 // Displayed in its own row under the clock; the clock slot itself is never
 // touched by this code. Sessions (weekdays only, holidays ignored — same
 // treatment as the server auto-refresh): 前場 9:00-11:30, 後場 12:30-15:30.
-// After the close (or on weekends) the target rolls to the next weekday.
+// Only the single next milestone is shown (e.g. during 前場 it counts down
+// to 前場終了); after the close (or on weekends) it rolls to the next
+// weekday's 前場開始.
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SESSION_MARKS = [
   { label: '前場開始まで', off: 9 * 3600e3, past: '開始済' },
@@ -605,19 +607,22 @@ function tickCountdown() {
   if (!el) return;
   const nowMs = Date.now();
   const todayStart = jstDayStart(nowMs);
-  let day = todayStart;
-  const wd = jstWeekday(day);
-  if (wd === 0 || wd === 6 || nowMs >= day + SESSION_MARKS[3].off) {
-    do { day += 86400e3; } while (jstWeekday(day) === 0 || jstWeekday(day) === 6);
+  // Find the next session mark still in the future, scanning today first
+  // and then the following weekdays (weekends skipped).
+  let found = null;
+  for (let add = 0; add < 8 && !found; add++) {
+    const day = todayStart + add * 86400e3;
+    const wd = jstWeekday(day);
+    if (wd === 0 || wd === 6) continue;
+    for (const m of SESSION_MARKS) {
+      const t = day + m.off;
+      if (t > nowMs) { found = { day, mark: m, target: t }; break; }
+    }
   }
-  const isToday = day === todayStart;
-  const items = SESSION_MARKS.map((m) => {
-    const t = day + m.off;
-    const val = (isToday && nowMs >= t) ? m.past : remainText(t, nowMs);
-    return `<span class="mc-item">${m.label} <b>${val}</b></span>`;
-  });
-  const prefix = isToday ? '' : `<span class="mc-item mc-day">${clockDateFmt.format(new Date(day + 12 * 3600e3))}の市場</span>`;
-  el.innerHTML = prefix + items.join('');
+  if (!found) { el.textContent = ''; return; }
+  const isToday = found.day === todayStart;
+  const label = isToday ? found.mark.label : `${clockDateFmt.format(new Date(found.day + 12 * 3600e3))}の${found.mark.label}`;
+  el.innerHTML = `<span class="mc-item">${label} <b>${remainText(found.target, nowMs)}</b></span>`;
 }
 
 function tickClock() {
