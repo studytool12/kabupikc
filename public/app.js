@@ -559,6 +559,22 @@ window.addEventListener('resize', () => {
   if (state.view === 'holdings') renderSectorPie();
 });
 
+// ---------- clock (JST) ----------
+// Rendered into a dedicated fixed-width slot in the tab row; textContent
+// updates only, so the clock never moves any other element. Runs on its
+// own timer, independent of the lock state and the data polling.
+const clockTimeFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+const clockDateFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', weekday: 'short' });
+function tickClock() {
+  const now = new Date();
+  const t = $('#clock-time');
+  if (t) t.textContent = clockTimeFmt.format(now);
+  const d = $('#clock-date');
+  if (d) d.textContent = clockDateFmt.format(now);
+}
+tickClock();
+setInterval(tickClock, 1000);
+
 // ---------- auto update (polling) ----------
 // The server refreshes prices from Yahoo every 3 min during market hours;
 // this page re-reads the data every 60 s and re-renders only when something

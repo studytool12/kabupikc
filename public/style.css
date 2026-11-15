@@ -7,7 +7,13 @@ header h1 { font-size: 18px; margin: 0; }
 button { cursor: pointer; border: 1px solid #bbb; background: #fff; border-radius: 6px; padding: 6px 12px; font-size: 13px; }
 button.primary { background: #123c33; color: #fff; border-color: #123c33; }
 button.danger { color: #c62828; border-color: #c62828; }
-nav#tabs { display: flex; gap: 4px; padding: 8px 16px 0; flex-wrap: wrap; }
+nav#tabs { display: flex; gap: 4px; padding: 8px 16px 0; flex-wrap: wrap; align-items: center; }
+/* ---- clock: dedicated fixed slot at the right end of the tab row.
+   flex:none + reserved width + tabular numbers => its position and size
+   never change, whatever the header status text or tab state does. ---- */
+#clock { margin-left: auto; flex: none; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; padding: 2px 0 4px 12px; }
+#clock-date { color: #000; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#clock-time { color: #000; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 8ch; text-align: right; letter-spacing: .02em; }
 nav#tabs button { border-bottom: none; border-radius: 8px 8px 0 0; background: #eee; }
 nav#tabs button.active { background: #fff; font-weight: 700; border-color: #123c33; }
 main { padding: 12px 16px 32px; }
@@ -98,6 +104,9 @@ td.flash-down { animation: flashDown 1.6s ease-out; }
   main { padding: 10px 10px 28px; }
   nav#tabs { padding: 8px 10px 0; gap: 6px; }
   nav#tabs button { flex: 1 1 30%; padding: 11px 6px; font-size: 13px; min-height: 42px; }
+  #clock { padding: 4px 0 2px 8px; }
+  #clock-time { font-size: 17px; }
+  #clock-date { font-size: 11px; }
   button { min-height: 38px; padding: 8px 12px; }
   .toolbar { gap: 8px; }
   .toolbar input[type="search"] { width: 100%; padding: 10px; font-size: 15px; }
